@@ -2,6 +2,17 @@ import AppKit
 
 private let fillLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.popUpMenuWindow)) - 1)
 
+private enum ShadeLanguage: String, CaseIterable {
+    case korean = "ko"
+    case english = "en"
+
+    var name: String { text("한국어", "English") }
+
+    func text(_ korean: String, _ english: String) -> String {
+        self == .korean ? korean : english
+    }
+}
+
 private struct WindowBehindShade {
     let number: Int
     let level: NSWindow.Level
@@ -177,14 +188,10 @@ private final class ShadeSurface: NSView {
         super.init(frame: .zero)
         dot.title = ""
         dot.isBordered = false
-        dot.toolTip = "가림막 설정"
-        dot.setAccessibilityLabel("가림막 설정")
         dot.target = owner
         dot.action = #selector(ShadeApp.toggleSettings(_:))
         bar.minValue = 0
         bar.maxValue = TransparencyScale.maximum
-        bar.toolTip = "가림막 투명도"
-        bar.setAccessibilityLabel("가림막 투명도")
         bar.target = owner
         bar.action = #selector(ShadeApp.changeTransparency(_:))
         bar.isContinuous = true
@@ -206,6 +213,15 @@ private final class ShadeSurface: NSView {
     }
 
     required init?(coder: NSCoder) { nil }
+
+    func updateLanguage(_ language: ShadeLanguage) {
+        let settings = language.text("가림막 설정", "Shade Settings")
+        let transparency = language.text("가림막 투명도", "Shade Transparency")
+        dot.toolTip = settings
+        dot.setAccessibilityLabel(settings)
+        bar.toolTip = transparency
+        bar.setAccessibilityLabel(transparency)
+    }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) { owner?.handleMouseDown(event) }
@@ -290,7 +306,13 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
     private let defaults = UserDefaults.standard
     private let popover = NSPopover()
     private let colorWell = ShadeColorWell(frame: .zero)
-    private lazy var fillButton = SettingsActionButton(title: "현재 화면 채우기", target: self, action: #selector(toggleFill))
+    private let colorLabel = NSTextField(labelWithString: "")
+    private let languageButton = RightClickableButton()
+    private lazy var floatingButton = RightClickableButton(checkboxWithTitle: "", target: self,
+                                                           action: #selector(changeFloating(_:)))
+    private lazy var fillButton = SettingsActionButton(title: "", target: self, action: #selector(toggleFill))
+    private lazy var hideButton = SettingsActionButton(title: "", target: self, action: #selector(hideShade))
+    private lazy var quitButton = SettingsActionButton(title: "", target: self, action: #selector(quitShade))
     private var panels: [CGDirectDisplayID: ShadePanel] = [:]
     private var geometry = ShadeGeometry(normalFrame: .zero, filledFrame: nil)
     private var filledDisplay: CGDirectDisplayID?
@@ -299,6 +321,16 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
     private var concealed = false
     private weak var settingsAnchor: NSView?
     private var settingsMonitor: Any?
+    private var choosingLanguage = false
+
+    private var language: ShadeLanguage {
+        ShadeLanguage(rawValue: defaults.string(forKey: "language") ?? "") ?? .korean
+    }
+
+    private var fillButtonTitle: String {
+        filledDisplay == nil ? language.text("현재 화면 채우기", "Fill Display")
+            : language.text("원래 크기로 복원", "Restore Original Size")
+    }
 
     private var color: NSColor {
         if let rgb = defaults.array(forKey: "color") as? [Double], rgb.count == 3 {
@@ -337,18 +369,25 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
     }
 
     private func configureMenu() {
+        let language = self.language
         let menu = NSMenu()
         let appItem = NSMenuItem()
         menu.addItem(appItem)
-        let appMenu = NSMenu()
+        let appMenu = NSMenu(title: language.text("가림막", "Focus Shade"))
         appItem.submenu = appMenu
-        appMenu.addItem(withTitle: "가림막 다시 앞으로", action: #selector(bringShadeForward), keyEquivalent: "").target = self
-        appMenu.addItem(withTitle: "설정", action: #selector(openSettingsFromMenu), keyEquivalent: ",").target = self
-        appMenu.addItem(withTitle: "화면 채우기 또는 복원", action: #selector(toggleFill), keyEquivalent: "f").target = self
-        appMenu.addItem(withTitle: "가림막 숨기기", action: #selector(hideShade), keyEquivalent: "m").target = self
-        appMenu.addItem(withTitle: "가림막 닫기", action: #selector(hideShade), keyEquivalent: "w").target = self
+        appMenu.addItem(withTitle: language.text("가림막 다시 앞으로", "Bring Shade Forward"),
+                        action: #selector(bringShadeForward), keyEquivalent: "").target = self
+        appMenu.addItem(withTitle: language.text("설정", "Settings"),
+                        action: #selector(openSettingsFromMenu), keyEquivalent: ",").target = self
+        appMenu.addItem(withTitle: language.text("화면 채우기 또는 복원", "Fill Display or Restore"),
+                        action: #selector(toggleFill), keyEquivalent: "f").target = self
+        appMenu.addItem(withTitle: language.text("가림막 숨기기", "Hide Shade"),
+                        action: #selector(hideShade), keyEquivalent: "m").target = self
+        appMenu.addItem(withTitle: language.text("가림막 닫기", "Close Shade"),
+                        action: #selector(hideShade), keyEquivalent: "w").target = self
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "가림막 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: language.text("가림막 종료", "Quit Focus Shade"),
+                        action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         NSApp.mainMenu = menu
     }
 
@@ -360,27 +399,33 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
         colorWell.color = color
         colorWell.target = self
         colorWell.action = #selector(changeColor(_:))
-        colorWell.setAccessibilityLabel("가림막 색상")
-        let colorLabel = NSTextField(labelWithString: "색상")
         colorLabel.setContentHuggingPriority(.required, for: .horizontal)
         let colorRow = NSStackView(views: [colorLabel, NSView(), colorWell])
         colorRow.alignment = .centerY
         colorRow.spacing = 8
 
-        let floating = RightClickableButton(checkboxWithTitle: "항상 위에 표시", target: self,
-                                             action: #selector(changeFloating(_:)))
-        floating.state = defaults.bool(forKey: "floating") ? .on : .off
-        let hide = SettingsActionButton(title: "가림막 숨기기", target: self, action: #selector(hideShade))
-        let quit = SettingsActionButton(title: "가림막 종료", target: self, action: #selector(quitShade))
-        for button in [fillButton, hide, quit] { button.isBordered = false }
-        let bottomActions = NSStackView(views: [hide, quit])
+        floatingButton.state = defaults.bool(forKey: "floating") ? .on : .off
+        floatingButton.setContentHuggingPriority(.required, for: .horizontal)
+        languageButton.title = ""
+        languageButton.isBordered = false
+        languageButton.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 16, weight: .regular))
+        languageButton.imagePosition = .imageOnly
+        languageButton.target = self
+        languageButton.action = #selector(showLanguageMenu(_:))
+        let optionsRow = NSStackView(views: [floatingButton, NSView(), languageButton])
+        optionsRow.alignment = .centerY
+        optionsRow.spacing = 8
+
+        for button in [fillButton, hideButton, quitButton] { button.isBordered = false }
+        let bottomActions = NSStackView(views: [hideButton, quitButton])
         bottomActions.alignment = .centerY
         bottomActions.distribution = .fillEqually
         bottomActions.spacing = 8
 
         let divider = NSBox()
         divider.boxType = .separator
-        let rows: [(NSView, CGFloat)] = [(colorRow, 32), (floating, 26), (divider, 5),
+        let rows: [(NSView, CGFloat)] = [(colorRow, 32), (optionsRow, 26), (divider, 5),
                                           (fillButton, 34), (bottomActions, 32)]
         let stack = NSStackView(views: rows.map(\.0))
         stack.orientation = .vertical
@@ -403,9 +448,12 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
             stack.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -verticalInset),
             colorWell.widthAnchor.constraint(equalToConstant: 64),
             colorWell.heightAnchor.constraint(equalToConstant: 26),
-            hide.heightAnchor.constraint(equalToConstant: 32),
-            quit.heightAnchor.constraint(equalToConstant: 32)
+            languageButton.widthAnchor.constraint(equalToConstant: 28),
+            languageButton.heightAnchor.constraint(equalToConstant: 26),
+            hideButton.heightAnchor.constraint(equalToConstant: 32),
+            quitButton.heightAnchor.constraint(equalToConstant: 32)
         ])
+        updateLanguageLabels()
         let controller = NSViewController()
         controller.view = content
         popover.contentViewController = controller
@@ -413,7 +461,7 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
         popover.behavior = .applicationDefined
         popover.animates = false
         settingsMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
-            guard let self, self.popover.isShown else { return event }
+            guard let self, self.popover.isShown, !self.choosingLanguage else { return event }
             if event.type == .keyDown {
                 if event.keyCode != 53 { return event }
                 self.closeSettings()
@@ -428,11 +476,53 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func updateLanguageLabels() {
+        let language = self.language
+        colorLabel.stringValue = language.text("색상", "Color")
+        colorWell.setAccessibilityLabel(language.text("가림막 색상", "Shade Color"))
+        floatingButton.title = language.text("항상 위에 표시", "Always on Top")
+        fillButton.title = fillButtonTitle
+        hideButton.title = language.text("가림막 숨기기", "Hide Shade")
+        quitButton.title = language.text("가림막 종료", "Quit Shade")
+        let label = language.text("언어", "Language")
+        languageButton.toolTip = label
+        languageButton.setAccessibilityLabel(label)
+        languageButton.setAccessibilityValue(language.name)
+        for panel in panels.values {
+            panel.title = language.text("가림막", "Focus Shade")
+            (panel.contentView as? ShadeSurface)?.updateLanguage(language)
+        }
+    }
+
+    private func makeLanguageMenu() -> NSMenu {
+        let menu = NSMenu()
+        for choice in ShadeLanguage.allCases {
+            let item = menu.addItem(withTitle: choice.name, action: #selector(selectLanguage(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = choice.rawValue
+            item.state = choice == language ? .on : .off
+        }
+        return menu
+    }
+
+    @objc private func showLanguageMenu(_ sender: NSButton) {
+        choosingLanguage = true
+        defer { choosingLanguage = false }
+        makeLanguageMenu().popUp(positioning: nil, at: NSPoint(x: 0, y: -4), in: sender)
+    }
+
+    @objc private func selectLanguage(_ sender: NSMenuItem) {
+        guard let value = sender.representedObject as? String, let choice = ShadeLanguage(rawValue: value) else { return }
+        defaults.set(choice.rawValue, forKey: "language")
+        configureMenu()
+        updateLanguageLabels()
+    }
+
     private func makePanel(for screen: NSScreen) -> ShadePanel {
         let panel = ShadePanel(contentRect: NSRect(x: 0, y: 0, width: 1, height: 1),
                                styleMask: [.borderless, .nonactivatingPanel], backing: .buffered,
                                defer: false, screen: screen)
-        panel.title = "가림막"
+        panel.title = language.text("가림막", "Focus Shade")
         panel.isReleasedWhenClosed = false
         panel.isRestorable = false
         panel.hasShadow = false
@@ -442,7 +532,9 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
         panel.acceptsMouseMovedEvents = true
         panel.animationBehavior = .none
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-        panel.contentView = ShadeSurface(owner: self)
+        let surface = ShadeSurface(owner: self)
+        surface.updateLanguage(language)
+        panel.contentView = surface
         return panel
     }
 
@@ -577,7 +669,7 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
             closeSettings()
             return
         }
-        fillButton.title = filledDisplay == nil ? "현재 화면 채우기" : "원래 크기로 복원"
+        fillButton.title = fillButtonTitle
         colorWell.panelLevel = NSWindow.Level(rawValue: max(NSWindow.Level.floating.rawValue, level.rawValue + 1))
         settingsAnchor = sender
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)

@@ -17,7 +17,7 @@ Focus Shade is a resizable overlay for macOS. Use it to cover part of a display 
 | Reveal a covered window | Double-click the solid area over the window. Click the shade once or reopen it from the Dock to cover it again. |
 | Adjust the look | Drag the thin bar at the top right. Open the small dot menu to change the color or toggle always-on-top. |
 
-The dot menu also lets you hide or quit the overlay. The app remembers its position, size, color, and transparency in local macOS preferences. Its controls currently use Korean labels.
+The dot menu also lets you hide or quit the overlay. The app remembers its position, size, color, and transparency in local macOS preferences. Use the globe icon in the dot menu to switch between English and Korean.
 
 ## Build
 
