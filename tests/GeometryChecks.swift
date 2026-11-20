@@ -34,6 +34,14 @@ struct GeometryChecks {
         let moved = filled.dragged(from: CGPoint(x: secondary.midX, y: secondary.midY), to: destination, edges: [])
         precondition(moved.filledFrame == nil && moved.frame.size == frame.size)
         precondition(moved.frame.midX == destination.x && moved.frame.midY == destination.y)
-        print("Geometry checks passed.")
+        let lowChange = TransparencyScale.percentage(at: 0.2) - TransparencyScale.percentage(at: 0.1)
+        let highChange = TransparencyScale.percentage(at: 0.9) - TransparencyScale.percentage(at: 0.8)
+        precondition(lowChange > 0 && highChange > 3 * lowChange)
+        precondition(TransparencyScale.percentage(at: -0.1) == 0)
+        precondition(TransparencyScale.percentage(at: 1.1) == TransparencyScale.maximum)
+        for x in [0.0, 0.1, 0.5, 0.9, 1.0] {
+            precondition(abs(TransparencyScale.position(for: TransparencyScale.percentage(at: x)) - x) < 0.000001)
+        }
+        print("Geometry and transparency checks passed.")
     }
 }

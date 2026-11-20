@@ -75,3 +75,16 @@ struct ShadeGeometry {
         return part.width >= 1 && part.height >= 1 ? part : nil
     }
 }
+
+struct TransparencyScale {
+    static let maximum: Double = 80
+    private static let exponent = 2.25
+
+    static func percentage(at position: Double) -> Double {
+        maximum * pow(min(1, max(0, position)), exponent)
+    }
+
+    static func position(for percentage: Double) -> Double {
+        pow(min(maximum, max(0, percentage)) / maximum, 1 / exponent)
+    }
+}

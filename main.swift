@@ -2,6 +2,36 @@ import AppKit
 
 private let fillLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.popUpMenuWindow)) - 1)
 
+private struct WindowBehindShade {
+    let number: Int
+    let level: NSWindow.Level
+    let frame: NSRect
+
+    static func at(_ point: NSPoint, below shade: NSWindow) -> Self? {
+        guard let primary = NSScreen.screens.first?.frame else { return nil }
+        let location = CGPoint(x: point.x - primary.minX, y: primary.maxY - point.y)
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        let candidates = CGWindowListCopyWindowInfo([.optionOnScreenBelowWindow, .excludeDesktopElements],
+                                                    CGWindowID(shade.windowNumber)) as? [[String: Any]] ?? []
+        for candidate in candidates {
+            guard let number = candidate[kCGWindowNumber as String] as? Int,
+                  let pid = candidate[kCGWindowOwnerPID as String] as? Int32, pid != ownPID,
+                  let layer = candidate[kCGWindowLayer as String] as? Int,
+                  layer >= NSWindow.Level.normal.rawValue, layer <= NSWindow.Level.modalPanel.rawValue,
+                  (candidate[kCGWindowAlpha as String] as? Double ?? 0) > 0.01,
+                  let rawBounds = candidate[kCGWindowBounds as String] as? NSDictionary,
+                  let bounds = CGRect(dictionaryRepresentation: rawBounds as CFDictionary),
+                  bounds.contains(location),
+                  let application = NSRunningApplication(processIdentifier: pid),
+                  application.activationPolicy != .prohibited else { continue }
+            let frame = NSRect(x: primary.minX + bounds.minX, y: primary.maxY - bounds.maxY,
+                               width: bounds.width, height: bounds.height)
+            return Self(number: number, level: NSWindow.Level(rawValue: layer), frame: frame)
+        }
+        return nil
+    }
+}
+
 @discardableResult
 private func trackMouse(_ down: NSEvent, update: (NSEvent) -> Void) -> NSEvent? {
     let drag: NSEvent.EventType = down.type == .rightMouseDown ? .rightMouseDragged : .leftMouseDragged
@@ -43,7 +73,7 @@ private final class SettingsDot: RightClickableButton {
     }
 }
 
-private final class OpacityBar: NSSlider {
+private final class TransparencyBar: NSSlider {
     var ink = NSColor.white { didSet { needsDisplay = true } }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -52,7 +82,7 @@ private final class OpacityBar: NSSlider {
         let track = NSRect(x: 1, y: bounds.midY - 1.5, width: bounds.width - 2, height: 3)
         ink.withAlphaComponent(0.24).setFill()
         NSBezierPath(roundedRect: track, xRadius: 1.5, yRadius: 1.5).fill()
-        let fraction = (doubleValue - minValue) / (maxValue - minValue)
+        let fraction = TransparencyScale.position(for: doubleValue)
         let progress = NSRect(x: track.minX, y: track.minY, width: max(3, track.width * fraction), height: track.height)
         ink.withAlphaComponent(0.8).setFill()
         NSBezierPath(roundedRect: progress, xRadius: 1.5, yRadius: 1.5).fill()
@@ -65,8 +95,7 @@ private final class OpacityBar: NSSlider {
         guard let window else { return }
         func update(_ event: NSEvent) {
             let point = convert(windowPoint(for: event, in: window), from: nil)
-            let fraction = min(1, max(0, (point.x - 1) / (bounds.width - 2)))
-            doubleValue = minValue + (maxValue - minValue) * fraction
+            doubleValue = TransparencyScale.percentage(at: (point.x - 1) / (bounds.width - 2))
             sendAction(action, to: target)
             needsDisplay = true
         }
@@ -77,6 +106,7 @@ private final class OpacityBar: NSSlider {
 
 private final class ShadeColorWell: NSColorWell {
     var panelLevel = NSWindow.Level.floating
+    var colorPanelIsVisible: Bool { NSColorPanel.sharedColorPanelExists && NSColorPanel.shared.isVisible }
 
     override func activate(_ exclusive: Bool) {
         NSColorPanel.shared.level = panelLevel
@@ -85,7 +115,23 @@ private final class ShadeColorWell: NSColorWell {
         NSColorPanel.shared.orderFrontRegardless()
     }
 
-    override func rightMouseDown(with event: NSEvent) {
+    override func deactivate() {
+        super.deactivate()
+        if colorPanelIsVisible { NSColorPanel.shared.orderOut(nil) }
+    }
+
+    override func performClick(_ sender: Any?) {
+        if colorPanelIsVisible {
+            deactivate()
+        } else {
+            activate(true)
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) { clickWell(with: event) }
+    override func rightMouseDown(with event: NSEvent) { clickWell(with: event) }
+
+    private func clickWell(with event: NSEvent) {
         if let released = trackMouse(event, update: { _ in }), let window,
            bounds.contains(convert(windowPoint(for: released, in: window), from: nil)) {
             performClick(nil)
@@ -104,7 +150,10 @@ private final class ShadePanel: NSPanel {
 
 private final class ShadeSurface: NSView {
     let dot = SettingsDot(frame: .zero)
-    let bar = OpacityBar(frame: .zero)
+    let bar = TransparencyBar(frame: .zero)
+    private(set) var fillColor = NSColor.clear
+    private var outline = NSRect.zero
+    private var bordered = false
     private lazy var barWidth = bar.widthAnchor.constraint(equalToConstant: 66)
     weak var owner: ShadeApp?
 
@@ -117,12 +166,12 @@ private final class ShadeSurface: NSView {
         dot.setAccessibilityLabel("가림막 설정")
         dot.target = owner
         dot.action = #selector(ShadeApp.toggleSettings(_:))
-        bar.minValue = 0.2
-        bar.maxValue = 1
-        bar.toolTip = "가림막 불투명도"
-        bar.setAccessibilityLabel("가림막 불투명도")
+        bar.minValue = 0
+        bar.maxValue = TransparencyScale.maximum
+        bar.toolTip = "가림막 투명도"
+        bar.setAccessibilityLabel("가림막 투명도")
         bar.target = owner
-        bar.action = #selector(ShadeApp.changeOpacity(_:))
+        bar.action = #selector(ShadeApp.changeTransparency(_:))
         bar.isContinuous = true
 
         for control in [dot, bar] {
@@ -144,8 +193,21 @@ private final class ShadeSurface: NSView {
     required init?(coder: NSCoder) { nil }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func mouseDown(with event: NSEvent) { owner?.drag(with: event) }
-    override func rightMouseDown(with event: NSEvent) { owner?.drag(with: event) }
+    override func mouseDown(with event: NSEvent) { owner?.handleMouseDown(event) }
+    override func rightMouseDown(with event: NSEvent) { owner?.handleMouseDown(event) }
+
+    override func draw(_ dirtyRect: NSRect) {
+        fillColor.setFill()
+        guard bordered else {
+            bounds.fill()
+            return
+        }
+        let shape = NSBezierPath(roundedRect: outline.insetBy(dx: 0.5, dy: 0.5), xRadius: 15, yRadius: 15)
+        shape.fill()
+        dot.ink.withAlphaComponent(0.18).setStroke()
+        shape.lineWidth = 1
+        shape.stroke()
+    }
 
     override func updateTrackingAreas() {
         for area in trackingAreas { removeTrackingArea(area) }
@@ -198,10 +260,14 @@ private final class ShadeSurface: NSView {
         barWidth.constant = max(4, min(66, width - 34))
     }
 
-    func refreshControls(ink: NSColor, opacity: CGFloat) {
+    func refreshAppearance(ink: NSColor, opacity: CGFloat, outline: NSRect, bordered: Bool, color: NSColor) {
         dot.ink = ink
         bar.ink = ink
-        bar.doubleValue = opacity
+        bar.doubleValue = (1 - opacity) * 100
+        self.outline = outline
+        self.bordered = bordered
+        fillColor = color.withAlphaComponent(opacity)
+        needsDisplay = true
     }
 }
 
@@ -214,6 +280,7 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
     private var geometry = ShadeGeometry(normalFrame: .zero, filledFrame: nil)
     private var filledDisplay: CGDirectDisplayID?
     private var controlDisplay: CGDirectDisplayID?
+    private var revealedWindow: WindowBehindShade?
     private var concealed = false
     private weak var settingsAnchor: NSView?
     private var settingsMonitor: Any?
@@ -240,7 +307,8 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidChangeScreenParameters(_ notification: Notification) {
-        popover.performClose(nil)
+        closeSettings()
+        revealedWindow = nil
         screenLayoutChanged()
     }
 
@@ -249,9 +317,7 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        concealed = false
-        refreshPanels()
-        for panel in panels.values where panel.isVisible { panel.orderFrontRegardless() }
+        bringShadeForward()
         return true
     }
 
@@ -261,6 +327,7 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
         menu.addItem(appItem)
         let appMenu = NSMenu()
         appItem.submenu = appMenu
+        appMenu.addItem(withTitle: "가림막 다시 앞으로", action: #selector(bringShadeForward), keyEquivalent: "").target = self
         appMenu.addItem(withTitle: "설정", action: #selector(openSettingsFromMenu), keyEquivalent: ",").target = self
         appMenu.addItem(withTitle: "화면 채우기 또는 복원", action: #selector(toggleFill), keyEquivalent: "f").target = self
         appMenu.addItem(withTitle: "가림막 숨기기", action: #selector(hideShade), keyEquivalent: "m").target = self
@@ -300,13 +367,14 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
             guard let self, self.popover.isShown else { return event }
             if event.type == .keyDown {
                 if event.keyCode != 53 { return event }
-                self.popover.performClose(nil)
+                self.closeSettings()
                 return nil
             }
             if event.window === self.popover.contentViewController?.view.window { return event }
+            if self.colorWell.colorPanelIsVisible && event.window === NSColorPanel.shared { return event }
             if let anchor = self.settingsAnchor, event.window === anchor.window,
                anchor.bounds.contains(anchor.convert(event.locationInWindow, from: nil)) { return event }
-            self.popover.performClose(nil)
+            self.closeSettings()
             return event
         }
     }
@@ -320,6 +388,7 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
         panel.isRestorable = false
         panel.hasShadow = false
         panel.isOpaque = false
+        panel.backgroundColor = .clear
         panel.hidesOnDeactivate = false
         panel.acceptsMouseMovedEvents = true
         panel.animationBehavior = .none
@@ -377,19 +446,25 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
         let rgb = color
         let luminance = 0.2126 * rgb.redComponent + 0.7152 * rgb.greenComponent + 0.0722 * rgb.blueComponent
         let ink: NSColor = luminance > 0.53 ? .black : .white
-        let fill = rgb.withAlphaComponent(opacity)
         let overlayLevel = level
+        let logicalFrame = geometry.frame
+        let bordered = filledDisplay == nil
         for (screen, frame) in pieces {
             let id = screen.shadeID
             let panel = panels[id] ?? makePanel(for: screen)
             panels[id] = panel
             let surface = panel.contentView as! ShadeSurface
             surface.setControlsVisible(id == controlDisplay, width: frame.width)
-            surface.refreshControls(ink: ink, opacity: opacity)
-            panel.backgroundColor = fill
-            panel.level = overlayLevel
+            let outline = logicalFrame.offsetBy(dx: -frame.minX, dy: -frame.minY)
+            surface.refreshAppearance(ink: ink, opacity: opacity, outline: outline, bordered: bordered, color: rgb)
+            let revealed = revealedWindow.flatMap { $0.frame.intersects(frame) ? $0 : nil }
+            panel.level = revealed?.level ?? overlayLevel
             if panel.frame != frame { panel.setFrame(frame, display: true) }
-            if !panel.isVisible { panel.orderFrontRegardless() }
+            if let revealed {
+                panel.order(.below, relativeTo: revealed.number)
+            } else if !panel.isVisible {
+                panel.orderFrontRegardless()
+            }
         }
         if NSColorPanel.sharedColorPanelExists {
             NSColorPanel.shared.level = NSWindow.Level(rawValue: max(NSWindow.Level.floating.rawValue, overlayLevel.rawValue + 1))
@@ -411,8 +486,21 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
         return filledDisplay == nil ? edges : []
     }
 
-    func drag(with event: NSEvent) {
-        let start = NSEvent.mouseLocation
+    func handleMouseDown(_ event: NSEvent) {
+        guard let panel = event.window else { return }
+        let point = panel.convertPoint(toScreen: event.locationInWindow)
+        if event.clickCount == 2 {
+            guard let underneath = WindowBehindShade.at(point, below: panel) else { return }
+            closeSettings()
+            revealedWindow = underneath
+            refreshPanels()
+            return
+        }
+        if revealedWindow != nil { bringShadeForward() }
+        drag(with: event, from: point)
+    }
+
+    private func drag(with event: NSEvent, from start: NSPoint) {
         let gesture = geometry
         let edges = resizeEdges(at: start)
         var changed = false
@@ -420,7 +508,7 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
             let point = NSEvent.mouseLocation
             if !changed {
                 guard hypot(point.x - start.x, point.y - start.y) >= 3 else { return }
-                popover.performClose(nil)
+                closeSettings()
                 changed = true
                 filledDisplay = nil
                 if edges.isEmpty { NSCursor.closedHand.set() }
@@ -433,7 +521,7 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
 
     @objc func toggleSettings(_ sender: NSView) {
         if popover.isShown {
-            popover.performClose(nil)
+            closeSettings()
             return
         }
         fillButton.title = filledDisplay == nil ? "현재 화면 채우기" : "원래 크기로 복원"
@@ -451,8 +539,20 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
         toggleSettings(surface.dot)
     }
 
-    @objc func changeOpacity(_ sender: NSSlider) {
-        defaults.set(sender.doubleValue, forKey: "opacity")
+    private func closeSettings() {
+        if colorWell.isActive || colorWell.colorPanelIsVisible { colorWell.deactivate() }
+        popover.performClose(nil)
+    }
+
+    @objc private func bringShadeForward() {
+        revealedWindow = nil
+        concealed = false
+        refreshPanels()
+        for panel in panels.values where panel.isVisible { panel.orderFrontRegardless() }
+    }
+
+    @objc func changeTransparency(_ sender: NSSlider) {
+        defaults.set(1 - sender.doubleValue / 100, forKey: "opacity")
         refreshPanels()
     }
 
@@ -464,10 +564,11 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
 
     @objc private func changeFloating(_ sender: NSButton) {
         defaults.set(sender.state == .on, forKey: "floating")
-        refreshPanels()
+        bringShadeForward()
     }
 
     @objc private func toggleFill() {
+        revealedWindow = nil
         if filledDisplay != nil {
             filledDisplay = nil
             geometry.filledFrame = nil
@@ -478,14 +579,14 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
             geometry.filledFrame = screen.frame
         }
         concealed = false
-        popover.performClose(nil)
+        closeSettings()
         saveGeometry()
         refreshPanels()
     }
 
     @objc private func hideShade() {
-        popover.performClose(nil)
-        if NSColorPanel.sharedColorPanelExists { NSColorPanel.shared.orderOut(nil) }
+        closeSettings()
+        revealedWindow = nil
         concealed = true
         refreshPanels()
         NSApp.hide(nil)
