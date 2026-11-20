@@ -1,0 +1,14 @@
+# Deny new files by default. Add reviewed project paths explicitly.
+*
+!/.gitignore
+!/README.md
+!/Info.plist
+!/main.swift
+!/ShadeGeometry.swift
+!/make-icon.swift
+!/build.sh
+!/.github/
+!/.github/workflows/
+!/.github/workflows/check.yml
+!/tests/
+!/tests/GeometryChecks.swift

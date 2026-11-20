@@ -1,0 +1,30 @@
+name: Checks
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  geometry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Test geometry with synthetic screens
+        run: |
+          swiftc ShadeGeometry.swift tests/GeometryChecks.swift -o "$RUNNER_TEMP/geometry-checks"
+          "$RUNNER_TEMP/geometry-checks"
+      - name: Validate build script and app metadata
+        run: |
+          sh -n build.sh
+          python3 -c 'import plistlib; plistlib.load(open("Info.plist", "rb"))'
