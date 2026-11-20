@@ -338,29 +338,62 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
     }
 
     private func configureSettings() {
+        let width: CGFloat = 264
+        let inset: CGFloat = 18
+        let verticalInset: CGFloat = 16
+
         colorWell.color = color
         colorWell.target = self
         colorWell.action = #selector(changeColor(_:))
         colorWell.setAccessibilityLabel("가림막 색상")
-        colorWell.widthAnchor.constraint(equalToConstant: 56).isActive = true
-        let colorRow = NSStackView(views: [NSTextField(labelWithString: "색상"), colorWell])
+        let colorLabel = NSTextField(labelWithString: "색상")
+        colorLabel.setContentHuggingPriority(.required, for: .horizontal)
+        let colorRow = NSStackView(views: [colorLabel, NSView(), colorWell])
         colorRow.alignment = .centerY
-        colorRow.spacing = 10
+        colorRow.spacing = 8
 
         let floating = RightClickableButton(checkboxWithTitle: "항상 위에 표시", target: self,
                                              action: #selector(changeFloating(_:)))
         floating.state = defaults.bool(forKey: "floating") ? .on : .off
         let hide = RightClickableButton(title: "가림막 숨기기", target: self, action: #selector(hideShade))
         let quit = RightClickableButton(title: "가림막 종료", target: self, action: #selector(quitShade))
-        let stack = NSStackView(views: [colorRow, floating, fillButton, hide, quit])
+        let bottomActions = NSStackView(views: [hide, quit])
+        bottomActions.alignment = .centerY
+        bottomActions.distribution = .fillEqually
+        bottomActions.spacing = 8
+
+        let divider = NSBox()
+        divider.boxType = .separator
+        let rows: [(NSView, CGFloat)] = [(colorRow, 32), (floating, 26), (divider, 5),
+                                          (fillButton, 34), (bottomActions, 32)]
+        let stack = NSStackView(views: rows.map(\.0))
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 9
-        stack.edgeInsets = NSEdgeInsets(top: 14, left: 15, bottom: 14, right: 15)
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        let content = NSView()
+        content.addSubview(stack)
+        for (row, height) in rows {
+            NSLayoutConstraint.activate([
+                row.widthAnchor.constraint(equalTo: stack.widthAnchor),
+                row.heightAnchor.constraint(equalToConstant: height)
+            ])
+        }
+        NSLayoutConstraint.activate([
+            content.widthAnchor.constraint(equalToConstant: width),
+            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: inset),
+            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -inset),
+            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: verticalInset),
+            stack.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -verticalInset),
+            colorWell.widthAnchor.constraint(equalToConstant: 64),
+            colorWell.heightAnchor.constraint(equalToConstant: 26),
+            hide.heightAnchor.constraint(equalToConstant: 32),
+            quit.heightAnchor.constraint(equalToConstant: 32)
+        ])
         let controller = NSViewController()
-        controller.view = stack
+        controller.view = content
         popover.contentViewController = controller
-        popover.contentSize = stack.fittingSize
+        popover.contentSize = content.fittingSize
         popover.behavior = .applicationDefined
         popover.animates = false
         settingsMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
