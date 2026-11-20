@@ -539,6 +539,10 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
         guard let panel = event.window else { return }
         let point = panel.convertPoint(toScreen: event.locationInWindow)
         if event.clickCount == 2 {
+            if ResizeEdges.hit(at: point, in: geometry.frame).contains(.top) {
+                toggleFillOnDisplay(panel.screen?.shadeID ?? controlDisplay)
+                return
+            }
             guard let underneath = WindowBehindShade.at(point, below: panel) else { return }
             closeSettings()
             revealedWindow = underneath
@@ -617,14 +621,18 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleFill() {
+        toggleFillOnDisplay(controlDisplay)
+    }
+
+    private func toggleFillOnDisplay(_ display: CGDirectDisplayID?) {
         revealedWindow = nil
         if filledDisplay != nil {
             filledDisplay = nil
             geometry.filledFrame = nil
         } else {
-            guard let controlDisplay,
-                  let screen = NSScreen.screens.first(where: { $0.shadeID == controlDisplay }) else { return }
-            filledDisplay = controlDisplay
+            guard let display,
+                  let screen = NSScreen.screens.first(where: { $0.shadeID == display }) else { return }
+            filledDisplay = display
             geometry.filledFrame = screen.frame
         }
         concealed = false
