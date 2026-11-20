@@ -12,3 +12,11 @@
 !/.github/workflows/check.yml
 !/tests/
 !/tests/GeometryChecks.swift
+!/README.ko.md
+!/CONTRIBUTING.md
+!/docs/
+!/docs/preview.png
+!/.github/ISSUE_TEMPLATE/
+!/.github/ISSUE_TEMPLATE/bug-report.yml
+!/.github/ISSUE_TEMPLATE/feature-request.yml
+!/.github/ISSUE_TEMPLATE/config.yml

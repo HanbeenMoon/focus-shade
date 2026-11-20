@@ -1,14 +1,27 @@
-# 가림막
+# Focus Shade
 
-macOS에서 화면 일부를 단색으로 가리는 앱입니다. 단색 면을 끌어 옮기고, 가장자리나 모서리를 끌어 크기를 바꿉니다. 창은 여러 디스플레이에 걸쳐 놓을 수 있습니다. 가림막의 단색 면을 더블클릭하면 그 위치 바로 뒤의 앱 창이 가림막 앞으로 옵니다. 가림막을 한 번 클릭하거나 Dock 아이콘을 누르면 다시 가릴 수 있습니다.
+Focus Shade is a resizable overlay for macOS. Use it to cover part of a display and reveal a window underneath when you need it.
 
-오른쪽 위 점으로 설정을 열고, 왼쪽의 짧은 막대로 투명도를 조절합니다. 막대 왼쪽에서는 미세하게, 오른쪽에서는 더 빠르게 바뀝니다. 색상 버튼을 두 번 누르면 첫 클릭에서 색상 패널이 열리고 다음 클릭에서 닫힙니다. 두 마우스 버튼을 모두 사용할 수 있습니다.
+**macOS 13 or later** · **Swift and AppKit**
 
-설정의 **현재 화면 채우기**는 해당 디스플레이의 메뉴 막대까지 가립니다. 상단 테두리를 더블클릭해도 그 지점의 디스플레이를 채울 수 있습니다. 상단을 다시 더블클릭하거나 채운 가림막을 끌면 이전 크기로 돌아갑니다.
+[Build from source](#build) · [Releases](../../releases) · [한국어](README.ko.md)
 
-## 빌드
+![Focus Shade overlay and settings popover on a sample desktop](docs/preview.png)
 
-macOS 13 이상과 현재 설치된 Xcode Command Line Tools 또는 Xcode가 필요합니다.
+## Use it
+
+| To | Do this |
+| --- | --- |
+| Cover part of the screen | Drag the solid area to move the shade. Drag an edge or corner to resize it. The shade can span displays. |
+| Fill a display | Double-click the top edge on that display. Double-click the top edge again to restore the previous size and position. |
+| Reveal a covered window | Double-click the solid area over the window. Click the shade once or reopen it from the Dock to cover it again. |
+| Adjust the look | Drag the thin bar at the top right. Open the small dot menu to change the color or toggle always-on-top. |
+
+The dot menu also lets you hide or quit the overlay. The app remembers its position, size, color, and transparency in local macOS preferences. Its controls currently use Korean labels.
+
+## Build
+
+Install Xcode Command Line Tools or Xcode, then open the downloaded source directory in Terminal.
 
 ```sh
 mkdir -p dist
@@ -16,14 +29,8 @@ mkdir -p dist
 open "$PWD/dist/가림막.app"
 ```
 
-빌드 결과는 로컬에서 서명합니다. Dock 아이콘 메뉴에서 **옵션 → Dock에 유지**를 선택할 수 있습니다. 창 위치와 색상 등은 macOS 앱 환경설정에 저장됩니다.
+The script builds and signs the bundle locally. To keep it in the Dock, use the app icon’s **Options → Keep in Dock** menu.
 
-## 검사
+## Report a problem
 
-```sh
-check_dir=$(mktemp -d)
-swiftc ShadeGeometry.swift tests/GeometryChecks.swift -o "$check_dir/geometry-checks"
-"$check_dir/geometry-checks"
-```
-
-CI는 임의로 정한 디스플레이 좌표를 사용해 화면 간 분할, 크기 조절, 이전 크기 복원을 확인합니다. 앱 창 확인은 macOS에서 수행합니다.
+Open a [GitHub issue](../../issues/new/choose) with your macOS version and steps to reproduce. For build and test commands, see [Contributing](CONTRIBUTING.md).

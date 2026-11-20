@@ -1,0 +1,31 @@
+name: Bug report
+description: Report a problem you can reproduce
+labels: [bug]
+body:
+  - type: input
+    id: environment
+    attributes:
+      label: App and macOS versions
+      placeholder: Focus Shade 1.2.3, macOS 15.7
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the display arrangement if more than one monitor is involved.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened and what did you expect?
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I removed personal information from any logs, screenshots, and recordings.
+          required: true

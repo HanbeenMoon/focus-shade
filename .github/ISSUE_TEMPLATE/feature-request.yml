@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest a change to Focus Shade
+labels: [enhancement]
+body:
+  - type: textarea
+    id: use_case
+    attributes:
+      label: What are you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: What would make that easier?
+    validations:
+      required: true
