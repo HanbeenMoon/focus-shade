@@ -6,7 +6,7 @@
 
 [빌드 방법](#빌드) · [릴리스](../../releases) · [English](README.md)
 
-![가상 데스크톱 위의 가림막과 설정 팝오버](docs/preview.png)
+![가림막과 한국어 설정 메뉴](docs/preview.ko.png)
 
 ## 사용법
 

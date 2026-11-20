@@ -6,7 +6,7 @@ Focus Shade is a resizable overlay for macOS. Use it to cover part of a display 
 
 [Build from source](#build) · [Releases](../../releases) · [한국어](README.ko.md)
 
-![Focus Shade overlay and settings popover on a sample desktop](docs/preview.png)
+![Focus Shade overlay with its settings in English](docs/preview.png)
 
 ## Use it
 
