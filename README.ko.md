@@ -25,11 +25,12 @@ Xcode Command Line Tools 또는 Xcode를 설치한 뒤, 내려받은 소스 폴�
 
 ```sh
 mkdir -p dist
-./build.sh "$PWD/dist/가림막.app"
-open "$PWD/dist/가림막.app"
+build_dir=$(mktemp -d "$PWD/dist/build.XXXXXXXX")
+./build.sh "$build_dir/가림막.app"
+open "$build_dir/가림막.app"
 ```
 
-빌드 스크립트는 앱을 로컬에서 서명합니다. Dock에 고정하려면 아이콘 메뉴에서 **옵션 → Dock에 유지**를 선택합니다.
+빌드 스크립트는 앱을 로컬에서 서명합니다. Dock에 고정하려면 완성된 앱을 응용 프로그램 폴더로 옮긴 뒤 아이콘 메뉴에서 **옵션 → Dock에 유지**를 선택합니다.
 
 ## 문제 신고
 

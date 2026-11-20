@@ -25,11 +25,12 @@ Install Xcode Command Line Tools or Xcode, then open the downloaded source direc
 
 ```sh
 mkdir -p dist
-./build.sh "$PWD/dist/가림막.app"
-open "$PWD/dist/가림막.app"
+build_dir=$(mktemp -d "$PWD/dist/build.XXXXXXXX")
+./build.sh "$build_dir/가림막.app"
+open "$build_dir/가림막.app"
 ```
 
-The script builds and signs the bundle locally. To keep it in the Dock, use the app icon’s **Options → Keep in Dock** menu.
+The script builds and signs the bundle locally. Move the finished app to Applications before using **Options → Keep in Dock** on its Dock icon.
 
 ## Report a problem
 
