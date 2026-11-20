@@ -539,7 +539,7 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
         guard let panel = event.window else { return }
         let point = panel.convertPoint(toScreen: event.locationInWindow)
         if event.clickCount == 2 {
-            if ResizeEdges.hit(at: point, in: geometry.frame).contains(.top) {
+            if geometry.isInTopBorder(point) {
                 toggleFillOnDisplay(panel.screen?.shadeID ?? controlDisplay)
                 return
             }

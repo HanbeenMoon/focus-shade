@@ -37,6 +37,12 @@ struct ShadeGeometry {
 
     var frame: CGRect { filledFrame ?? normalFrame }
 
+    func isInTopBorder(_ point: CGPoint) -> Bool {
+        let bounds = frame
+        return (bounds.minX...bounds.maxX).contains(point.x)
+            && (0...30).contains(bounds.maxY - point.y)
+    }
+
     func dragged(from start: CGPoint, to point: CGPoint, edges: ResizeEdges) -> Self {
         let dx = point.x - start.x
         let dy = point.y - start.y

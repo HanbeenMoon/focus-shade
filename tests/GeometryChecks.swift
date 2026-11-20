@@ -15,6 +15,13 @@ struct GeometryChecks {
         precondition(geometry.clipped(to: secondary) == CGRect(x: 1600, y: 210, width: 210, height: 200))
         precondition(geometry.clipped(to: CGRect(x: -900, y: 0, width: 900, height: 600)) == nil)
 
+
+        precondition(geometry.isInTopBorder(CGPoint(x: frame.midX, y: frame.maxY - 25)))
+        precondition(geometry.isInTopBorder(CGPoint(x: frame.midX, y: frame.maxY - 30)))
+        precondition(!geometry.isInTopBorder(CGPoint(x: frame.midX, y: frame.maxY - 31)))
+        precondition(!geometry.isInTopBorder(CGPoint(x: frame.midX, y: frame.maxY + 1)))
+        precondition(!geometry.isInTopBorder(CGPoint(x: frame.minX - 1, y: frame.maxY - 2)))
+
         let nearCorner = CGPoint(x: frame.maxX - 20, y: frame.minY + 10)
         let edges = ResizeEdges.hit(at: nearCorner, in: frame)
         precondition(edges == [.right, .bottom])
