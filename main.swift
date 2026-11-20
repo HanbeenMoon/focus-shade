@@ -64,6 +64,21 @@ private class RightClickableButton: NSButton {
     }
 }
 
+private final class SettingsActionButton: RightClickableButton {
+    override func draw(_ dirtyRect: NSRect) {
+        let background = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 1), xRadius: 8, yRadius: 8)
+        NSColor.labelColor.withAlphaComponent(cell?.isHighlighted == true ? 0.20 : 0.10).setFill()
+        background.fill()
+
+        let label = NSAttributedString(string: title, attributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .medium),
+            .foregroundColor: NSColor.labelColor
+        ])
+        let size = label.size()
+        label.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2))
+    }
+}
+
 private final class SettingsDot: RightClickableButton {
     var ink = NSColor.white { didSet { needsDisplay = true } }
 
@@ -275,7 +290,7 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
     private let defaults = UserDefaults.standard
     private let popover = NSPopover()
     private let colorWell = ShadeColorWell(frame: .zero)
-    private lazy var fillButton = RightClickableButton(title: "현재 화면 채우기", target: self, action: #selector(toggleFill))
+    private lazy var fillButton = SettingsActionButton(title: "현재 화면 채우기", target: self, action: #selector(toggleFill))
     private var panels: [CGDirectDisplayID: ShadePanel] = [:]
     private var geometry = ShadeGeometry(normalFrame: .zero, filledFrame: nil)
     private var filledDisplay: CGDirectDisplayID?
@@ -355,8 +370,9 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
         let floating = RightClickableButton(checkboxWithTitle: "항상 위에 표시", target: self,
                                              action: #selector(changeFloating(_:)))
         floating.state = defaults.bool(forKey: "floating") ? .on : .off
-        let hide = RightClickableButton(title: "가림막 숨기기", target: self, action: #selector(hideShade))
-        let quit = RightClickableButton(title: "가림막 종료", target: self, action: #selector(quitShade))
+        let hide = SettingsActionButton(title: "가림막 숨기기", target: self, action: #selector(hideShade))
+        let quit = SettingsActionButton(title: "가림막 종료", target: self, action: #selector(quitShade))
+        for button in [fillButton, hide, quit] { button.isBordered = false }
         let bottomActions = NSStackView(views: [hide, quit])
         bottomActions.alignment = .centerY
         bottomActions.distribution = .fillEqually
