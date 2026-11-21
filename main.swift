@@ -322,6 +322,7 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
     private weak var settingsAnchor: NSView?
     private var settingsMonitor: Any?
     private var choosingLanguage = false
+    private var showingQuickStart = false
 
     private var language: ShadeLanguage {
         ShadeLanguage(rawValue: defaults.string(forKey: "language") ?? "") ?? .korean
@@ -345,12 +346,20 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        defaults.register(defaults: ["opacity": 1.0, "floating": true])
+        let preferredLanguage = Locale.Language(identifier: Locale.preferredLanguages.first ?? "en")
+        let defaultLanguage = preferredLanguage.languageCode?.identifier == "ko"
+            ? ShadeLanguage.korean : .english
+        defaults.register(defaults: ["opacity": 1.0, "floating": true, "language": defaultLanguage.rawValue])
         configureMenu()
         configureSettings()
         geometry.normalFrame = NSRectFromString(defaults.string(forKey: "frame") ?? "")
         filledDisplay = (defaults.object(forKey: "filledDisplay") as? NSNumber)?.uint32Value
         screenLayoutChanged()
+        if !defaults.bool(forKey: "hasSeenQuickStart") {
+            DispatchQueue.main.async {
+                self.showQuickStart()
+            }
+        }
     }
 
     func applicationDidChangeScreenParameters(_ notification: Notification) {
@@ -385,10 +394,65 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
                         action: #selector(hideShade), keyEquivalent: "m").target = self
         appMenu.addItem(withTitle: language.text("가림막 닫기", "Close Shade"),
                         action: #selector(hideShade), keyEquivalent: "w").target = self
+        appMenu.addItem(withTitle: language.text("빠른 사용 안내", "Quick Start"),
+                        action: #selector(showQuickStart), keyEquivalent: "").target = self
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: language.text("가림막 종료", "Quit Focus Shade"),
                         action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         NSApp.mainMenu = menu
+    }
+
+    @objc private func showQuickStart() {
+        guard !showingQuickStart else { return }
+        showingQuickStart = true
+        defer {
+            showingQuickStart = false
+            refreshPanels()
+        }
+        closeSettings()
+        refreshPanels()
+
+        let firstVisit = !defaults.bool(forKey: "hasSeenQuickStart")
+        let alert = NSAlert()
+        alert.messageText = language.text("가림막 빠른 사용 안내", "Focus Shade Quick Start")
+        alert.informativeText = language.text(
+            """
+            옮기기와 크기 조절
+            단색 면을 끌어 옮기고, 가장자리나 모서리를 끌어 크기를 바꾸세요.
+
+            화면 채우기
+            상단 테두리를 더블클릭하세요. 다시 더블클릭하면 원래 크기로 돌아옵니다.
+
+            뒤쪽 창 보기
+            보고 싶은 창 위의 단색 면을 더블클릭하세요. 가림막을 다시 누르거나 Dock 아이콘을 누르면 다시 가려집니다.
+
+            설정 열기
+            오른쪽 위 점을 누르면 색상과 언어를 바꾸거나 가림막을 숨길 수 있습니다. 옆의 가로 막대로 투명도를 조절하세요.
+            """,
+            """
+            Move and resize
+            Drag the solid area to move the shade. Drag an edge or corner to resize it.
+
+            Fill the display
+            Double-click the top edge. Double-click it again to restore the previous size.
+
+            Reveal a window
+            Double-click the solid area over the window you want to see. Click the shade or its Dock icon to cover it again.
+
+            Open settings
+            Click the dot at the top right to change color or language, or to hide the shade. Drag the bar beside it to adjust transparency.
+            """
+        )
+        let buttonTitle = firstVisit ? language.text("시작하기", "Get Started") : language.text("닫기", "Done")
+        alert.addButton(withTitle: buttonTitle)
+        if #available(macOS 14.0, *) {
+            NSApp.activate()
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        if alert.runModal() == .alertFirstButtonReturn {
+            defaults.set(true, forKey: "hasSeenQuickStart")
+        }
     }
 
     private func configureSettings() {
@@ -568,7 +632,7 @@ private final class ShadeApp: NSObject, NSApplicationDelegate {
     }
 
     private func refreshPanels() {
-        if concealed {
+        if concealed || showingQuickStart {
             for panel in panels.values { panel.orderOut(nil) }
             return
         }

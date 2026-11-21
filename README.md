@@ -4,9 +4,25 @@ Focus Shade is a resizable overlay for macOS. Use it to cover part of a display 
 
 **macOS 13 or later** · **Swift and AppKit**
 
-[Build from source](#build) · [Releases](../../releases) · [한국어](README.ko.md)
+**[Download for macOS](https://github.com/HanbeenMoon/focus-shade/releases/latest/download/FocusShade-macOS.zip)** · [Build from source](#build) · [한국어](README.ko.md)
 
 ![Focus Shade overlay with its settings in English](docs/preview.png)
+
+## Install
+
+The download works on Apple silicon and Intel Macs running macOS 13 or later.
+
+1. Download the ZIP and open it.
+2. Move **가림막.app** into **Applications**, then open it.
+3. Read the quick guide and click **Get Started**. To open it later, choose **Focus Shade → Quick Start** from the menu bar.
+
+The download is ad hoc signed and has no Apple notarization. If macOS blocks the first launch, check that you downloaded it from this repository. Apple explains the **Open Anyway** option in **System Settings → Privacy & Security**. You can also [build locally](#build). [Apple’s guidance on opening apps](https://support.apple.com/en-us/102445)
+
+## Why Focus Shade exists
+
+While working across several displays, I kept glancing at windows I still needed later. Closing them meant finding and opening them again when I needed a reference.
+
+The design question was how to put those windows out of sight and still reach them in one gesture. A movable, resizable shade covers just the distracting area. Double-clicking the shade brings the window beneath it into view. A small dot and an opacity bar keep everyday controls within reach of the shaded area.
 
 ## Use it
 
